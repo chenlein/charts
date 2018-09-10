@@ -1,0 +1,10 @@
+apiVersion: v1
+description: Presto is an open source distributed SQL query engine for running interactive analytic queries against data sources of all sizes ranging from gigabytes to petabytes.
+name: presto
+version: 1.0.0
+appVersion: 0.208
+home: https://prestodb.io
+icon: https://prestodb.io/docs/current/_static/presto.png
+maintainers:
+  - name: chenlei
+    email: leichen.china@gmail.com

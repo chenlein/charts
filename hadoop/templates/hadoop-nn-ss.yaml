@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "fullname" . }}-nn
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+    component: hadoop-nn
+spec:
+  replicas: {{ .Values.hadoop.nn.replicas }}
+  revisionHistoryLimit: {{ .Values.hadoop.nn.revisionHistoryLimit }}
+  serviceName: {{ template "fullname" . }}-nn-service
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: "{{ .Release.Name }}"
+        heritage: "{{ .Release.Service }}"
+        component: hadoop-nn
+    spec:
+      containers:
+        - name: hadoop-nn
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["bash", "-c", "chmod +x /root/bootstrap/bootstrap.sh && /root/bootstrap/bootstrap.sh"]
+          resources:
+{{ toYaml .Values.hadoop.nn.resources | indent 10 -}}
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: NODE_TYPE
+              value: NN,RM
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hadoop-custom-config-volume
+              mountPath: /root/bootstrap
+            - name: dfs-name-dir-volume
+              mountPath: /root/hadoop/dfs/name
+            - name: dfs-data-dir-volume
+              mountPath: /root/hadoop/dfs/data
+            - name: hadoop-tmp-dir-volume
+              mountPath: /root/hadoop/tmp
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ template "fullname" . }}-config-pvc
+        - name: hadoop-custom-config-volume
+          configMap:
+            name: {{ template "fullname" . }}-config-cm
+        - name: dfs-name-dir-volume
+{{ toYaml .Values.hadoop.nn.persistence.name | indent 10 }}
+        - name: dfs-data-dir-volume
+{{ toYaml .Values.hadoop.nn.persistence.data | indent 10 }}
+        - name: hadoop-tmp-dir-volume
+{{ toYaml .Values.hadoop.nn.persistence.tmp | indent 10 }}

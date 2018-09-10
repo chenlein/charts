@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "fullname" . }}-config-cm
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+data:
+  bootstrap.sh: |-
+    #!/bin/bash
+
+    cd /root/bootstrap
+
+    # Don't override slaves、core-site.xml and yarn-site.xml
+    rm -f $HADOOP_HOME/etc/hadoop/slaves $HADOOP_HOME/etc/hadoop/core-site.xml $HADOOP_HOME/etc/hadoop/yarn-site.xml
+
+    # Copy original hadoop file to $HADOOP_CONF_DIR
+    cp -a $HADOOP_HOME/etc/hadoop/* $HADOOP_CONF_DIR
+
+    # Get this node's FQDN
+    FQDN=`ping $HOSTNAME -c 1 | grep PING | awk '{print $2}'`
+
+    # If this node is nameNode, set it's FQDN to core-site.xml file and yarn-site.xml file
+    if [[ "$NODE_TYPE" =~ "NN" ]]; then
+      # Apply custom config file context
+      for cfg in ./*; do
+        if [[ ! "$cfg" =~ bootstrap.sh ]]; then
+          cat $cfg > $HADOOP_CONF_DIR/${cfg##*/}
+        fi
+      done
+
+      # Set nameNode's FQDN to file
+      echo $FQDN > $HADOOP_CONF_DIR/NameNode
+
+      # Replace nameNode's FQDN
+      sed -i 's/${NAME_NODE_FQDN}/'$FQDN'/g' `grep '${NAME_NODE_FQDN}' -rl $HADOOP_CONF_DIR`
+
+      # Format HDFS if not formatted yet
+      if [[ ! -e $HADOOP_CONF_DIR/hdfs-namenode-format.out ]]; then
+        $HADOOP_HOME/bin/hdfs namenode -format -force -nonInteractive &> $HADOOP_CONF_DIR/hdfs-namenode-format.out
+        $HADOOP_HOME/bin/hdfs namenode -format -force -nonInteractive &> $HADOOP_CONF_DIR/hdfs-namenode-format.out
+      fi
+      
+      # Start hadoop nameNode daemon
+      $HADOOP_HOME/sbin/hadoop-daemon.sh start namenode
+    fi
+
+    # If this node is ResourceManager
+    if [[ "$NODE_TYPE" =~ "RM" ]]; then
+      $HADOOP_HOME/sbin/yarn-daemon.sh start resourcemanager
+    fi
+
+    # If this node is nodeManager, add it to slave
+    if [[ "$NODE_TYPE" =~ "NM" ]]; then
+      sed -i '/'$FQDN'/d' $HADOOP_CONF_DIR/slaves
+      echo $FQDN >> $HADOOP_CONF_DIR/slaves
+
+      # Waiting nameNode set NAME_NODE_FQDN
+      while [[ ! -e $HADOOP_CONF_DIR/NameNode || -z $NAME_NODE_FQDN ]]; do
+        echo "Waiting for nameNode set NAME_NODE_FQDN" && sleep 2 && NAME_NODE_FQDN=`cat $HADOOP_CONF_DIR/NameNode`
+      done
+
+      # Start hadoop nodeManager daemon
+      while [[ -z `curl -sf http://$NAME_NODE_FQDN:8088/ws/v1/cluster/info` ]]; do
+        echo "Waiting for $FQDN" && sleep 2
+      done
+      $HADOOP_HOME/sbin/yarn-daemon.sh start nodemanager
+    fi
+
+    # If this node is dataNode, add it to slave
+    if [[ "$NODE_TYPE" =~ "DN" ]]; then
+      sed -i '/'$FQDN'/d' $HADOOP_CONF_DIR/slaves
+      echo $FQDN >> $HADOOP_CONF_DIR/slaves
+
+      # Waiting nameNode set NAME_NODE_FQDN
+      while [[ ! -e $HADOOP_CONF_DIR/NameNode || -z $NAME_NODE_FQDN ]]; do
+        echo "Waiting for nameNode set NAME_NODE_FQDN" && sleep 2 && NAME_NODE_FQDN=`cat $HADOOP_CONF_DIR/NameNode`
+      done
+
+      # Start hadoop dataNode daemon
+      while [[ -z `curl -sf http://$NAME_NODE_FQDN:50070` ]]; do
+        echo "Waiting for $NAME_NODE_FQDN" && sleep 2
+      done
+      $HADOOP_HOME/sbin/hadoop-daemon.sh start datanode
+    fi
+
+    # keep running
+    sleep infinity
+  hdfs-site.xml: |-
+    <?xml version="1.0" encoding="UTF-8"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <!--
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License. See accompanying LICENSE file.
+    -->
+
+    <!-- Put site-specific property overrides in this file. -->
+
+    <configuration>
+      <property>
+        <name>dfs.name.dir</name>
+        <value>/root/hadoop/dfs/name</value>
+      </property>
+      <property>
+        <name>dfs.data.dir</name>
+        <value>/root/hadoop/dfs/data</value>
+      </property>
+      <property>
+        <name>dfs.replication</name>
+        <value>3</value>
+      </property>
+      <property>
+        <name>dfs.rpc-bind-host</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>dfs.servicerpc-bind-host</name>
+        <value>0.0.0.0</value>
+      </property>
+    </configuration>
+  core-site.xml: |-
+    <?xml version="1.0" encoding="UTF-8"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <!--
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License. See accompanying LICENSE file.
+    -->
+
+    <!-- Put site-specific property overrides in this file. -->
+
+    <configuration>
+      <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://${NAME_NODE_FQDN}:9000</value>
+      </property>
+      <property>
+        <name>hadoop.tmp.dir</name>
+        <value>/root/hadoop/tmp</value>
+      </property>
+    </configuration>
+  mapred-site.xml: |-
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <!--
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License. See accompanying LICENSE file.
+    -->
+
+    <!-- Put site-specific property overrides in this file. -->
+
+    <configuration>
+      <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+      </property>
+    </configuration>
+  yarn-site.xml: |-
+    <?xml version="1.0"?>
+    <!--
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License. See accompanying LICENSE file.
+    -->
+    <configuration>
+
+    <!-- Site specific YARN configuration properties -->
+      <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>${NAME_NODE_FQDN}</value>
+      </property>
+      <property>
+        <name>yarn.resourcemanager.bind-host</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>yarn.nodemanager.bind-host</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>yarn.timeline-service.bind-host</name>
+        <value>0.0.0.0</value>
+      </property>
+      <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+      </property>
+      <property>
+        <name>yarn.nodemanager.aux-services.mapreduce_shuffle.class</name>
+        <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+      </property>
+      <property>
+        <name>yarn.nodemanager.vmem-check-enabled</name>
+        <value>false</value>
+      </property>
+
+    </configuration>

@@ -1,0 +1,50 @@
+image: 192.168.101.88:5000/dmcop2/presto-server:dm-0.208
+imagePullPolicy: IfNotPresent
+
+node:
+  environment: production
+  dataDir: /var/presto/data
+
+jvm:
+  maxHeapSize: 16G
+  GCMethod:
+    type: +UseG1GC
+    heapRegionSize: 32M
+
+config:
+  includeCoordinator: true
+  httpPort: 8080
+  maxMemory: 10GB
+  maxMemoryPerNode: 1GB
+  maxTotalMemoryPerNode: 2GB
+
+log:
+  level: INFO
+
+catalog:
+  hive.properties: |-
+    connector.name=hive-hadoop2
+    hive.metastore.uri=thrift://hive-service:9083
+
+coordinator:
+  service:
+    type: NodePort
+  replicas: 1
+  revisionHistoryLimit: 10
+  resources:
+    requests:
+      cpu: 100m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 8Gi
+worker:
+  replicas: 2
+  revisionHistoryLimit: 10
+  resources:
+    requests:
+      cpu: 100m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 8Gi

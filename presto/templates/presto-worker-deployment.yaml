@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}-worker
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+    component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  revisionHistoryLimit: {{ .Values.worker.revisionHistoryLimit }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: "{{ .Release.Name }}"
+        heritage: "{{ .Release.Service }}"
+        component: worker
+    spec:
+      initContainers:
+        - name: wait-coordinator
+          image:  {{ .Values.image }}
+          command: ["bash", "-c", "until curl -sf http://{{ template "fullname" . }}-coordinator-service:{{ .Values.config.httpPort }}/ui/; do echo 'waiting for coordinator started...'; sleep 2; done;"]
+      containers:
+        - name: presto-worker
+          image: {{ .Values.image }}
+          command: ["bash", "-c", "chmod +x /root/bootstrap/bootstrap.sh && /root/bootstrap/bootstrap.sh"]
+          resources:
+{{ toYaml .Values.worker.resources | indent 10 -}}
+          ports:
+            - name: http-coord
+              containerPort: {{ .Values.config.httpPort }}
+              protocol: TCP
+          env:
+            - name: COORDINATOR_NODE
+              value: "false"
+          volumeMounts:
+            - name: presto-config-volume
+              mountPath: /root/bootstrap
+            - name: presto-catalog-config-volume
+              mountPath: /root/catalog
+            - name: presto-data-volume
+              mountPath: /var/presto/data
+          readinessProbe:
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            exec:
+              command: ["bash", "-c", "curl -s http://{{ template "fullname" . }}-coordinator-service:{{ .Values.config.httpPort }}/v1/node | tr ',' '\n' | grep -s $(hostname -i)"]
+      volumes:
+        - name: presto-config-volume
+          configMap:
+            name: {{ template "fullname" . }}-config-cm
+        - name: presto-catalog-config-volume
+          configMap:
+            name: {{ template "fullname" . }}-catalog-cm
+        - name: presto-data-volume
+          emptyDir: {}

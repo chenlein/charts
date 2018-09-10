@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}-coordinator
+spec:
+  replicas: {{ .Values.coordinator.replicas }}
+  revisionHistoryLimit: {{ .Values.coordinator.revisionHistoryLimit }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: "{{ .Release.Name }}"
+        heritage: "{{ .Release.Service }}"
+        component: coordinator
+    spec:
+      containers:
+        - name: presto-coordinator
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["bash", "-c", "chmod +x /root/bootstrap/bootstrap.sh && /root/bootstrap/bootstrap.sh"]
+          resources:
+{{ toYaml .Values.coordinator.resources | indent 10 -}}
+          ports:
+            - name: http-coord
+              containerPort: {{ .Values.config.httpPort }}
+              protocol: TCP
+          env:
+            - name: COORDINATOR_NODE
+              value: "true"
+          volumeMounts:
+            - name: presto-config-volume
+              mountPath: /root/bootstrap
+            - name: presto-catalog-config-volume
+              mountPath: /root/catalog
+            - name: presto-data-volume
+              mountPath: /var/presto/data
+          readinessProbe:
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            httpGet:
+              path: /v1/cluster
+              port: http-coord
+      volumes:
+        - name: presto-config-volume
+          configMap:
+            name: {{ template "fullname" . }}-config-cm
+        - name: presto-catalog-config-volume
+          configMap:
+            name: {{ template "fullname" . }}-catalog-cm
+        - name: presto-data-volume
+          emptyDir: {}

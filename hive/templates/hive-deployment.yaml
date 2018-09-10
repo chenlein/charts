@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  replicas: {{ .Values.hive.replicas }}
+  revisionHistoryLimit: {{ .Values.hive.revisionHistoryLimit }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: "{{ .Release.Name }}"
+        heritage: "{{ .Release.Service }}"
+    spec:
+      initContainers:
+        - name: init-dababase
+          image: {{ .Values.image.init }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: DRIVER_NAME
+              value: "{{ .Values.hive.metastore.driver }}"
+            - name: URL
+              value: "{{ .Values.hive.metastore.url }}"
+            - name: USERNAME
+              value: "{{ .Values.hive.metastore.DBAUsername }}"
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "fullname" . }}-metastore-secret
+                  key: database-dba-password
+            - name: IDENTIFIED
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "fullname" . }}-metastore-secret
+                  key: database-user-password
+          volumeMounts:
+            - name: init-dababase-volume
+              mountPath: /root/db_tools/script
+      containers:
+        - name: hive
+          image: {{ .Values.image.hive }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["bash", "-c", "chmod +x /root/bootstrap/bootstrap.sh && /root/bootstrap/bootstrap.sh"]
+          resources:
+{{ toYaml .Values.hive.resources | indent 10 -}}
+          ports:
+            - containerPort: 10000
+              name: thrift
+            - containerPort: 10002
+              name: webui
+            - containerPort: 9083
+              name: metastore
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: HIVE_METADATA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "fullname" . }}-metastore-secret
+                  key: database-user-password
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hive-custom-config-volume
+              mountPath: /root/bootstrap
+          readinessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            tcpSocket:
+              port: 10000
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ .Values.hadoop.config.pvc }}
+        - name: hive-custom-config-volume
+          configMap:
+            name: {{ template "fullname" . }}-config-cm
+        - name: init-dababase-volume
+          configMap:
+            name: {{ template "fullname" . }}-metastore-init-cm

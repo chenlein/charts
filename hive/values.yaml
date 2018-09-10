@@ -1,0 +1,27 @@
+image:
+  hive: 192.168.101.88:5000/dmcop2/hive:dm-2.3.3
+  init: 192.168.101.88:5000/dmcop2/database-tools:1.0-SNAPSHOT
+imagePullPolicy: IfNotPresent
+hadoop:
+  config:
+    pvc: hadoop-config-pvc
+hive:
+  replicas: 1
+  revisionHistoryLimit: 10
+  metastore:
+    type: mysql
+    url: jdbc:mysql://hive-metastore-mysql-service:3306/metastore?createDatabaseIfNotExist=true&amp;useSSL=false
+    driver: com.mysql.jdbc.Driver
+    username: hive
+    password: Dameng@777
+    DBAUsername: root
+    DBAPassword: Dameng@777
+  service:
+    type: NodePort
+  resources:
+    requests:
+      cpu: 100m
+      memory: 4Gi
+    limits:
+      cpu: 2000m
+      memory: 8Gi

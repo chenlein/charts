@@ -1,0 +1,48 @@
+image: 192.168.101.88:5000/dmcop2/hadoop:dm-2.9.1
+imagePullPolicy: IfNotPresent
+hadoop:
+  config:
+    persistence:
+      storage: 16Mi
+      accessModes: ReadWriteMany
+      provisioner:
+        nfs:
+          path: /home/nfs/data/hadoop-config
+          server: 192.168.112.240
+  ui:
+    service:
+      type: NodePort
+  nn:
+    replicas: 1
+    revisionHistoryLimit: 10
+    persistence:
+      name:
+        emptyDir: {}
+      data:
+        emptyDir: {}
+      tmp:
+        emptyDir: {}
+    resources:
+      requests:
+        cpu: 100m 
+        memory: 4Gi
+      limits:
+        cpu: 2000m
+        memory: 8Gi
+  dn:
+    replicas: 3
+    revisionHistoryLimit: 10
+    persistence:
+      name:
+        emptyDir: {}
+      data:
+        emptyDir: {}
+      tmp:
+        emptyDir: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 4Gi
+      limits:
+        cpu: 1000m
+        memory: 8Gi

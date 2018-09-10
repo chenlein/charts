@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ template "fullname" . }}-config-pv
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  capacity:
+    storage: {{ .Values.hadoop.config.persistence.storage }}
+  accessModes:
+    - {{ .Values.hadoop.config.persistence.accessModes }}
+  persistentVolumeReclaimPolicy: Retain
+{{ toYaml .Values.hadoop.config.persistence.provisioner | indent 2 }}

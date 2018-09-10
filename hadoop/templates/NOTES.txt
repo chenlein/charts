@@ -1,0 +1,15 @@
+1. You can check the status of HDFS by running this command:
+   kubectl exec -n {{ .Release.Namespace }} -it {{ template "fullname" . }}-nn-0 -- bash -c '$HADOOP_HOME/bin/hdfs dfsadmin -report'
+
+2. You can list the yarn nodes by running this command:
+   kubectl exec -n {{ .Release.Namespace }} -it {{ template "fullname" . }}-nn-0 -- bash -c '$HADOOP_HOME/bin/yarn node -list'
+
+3. You can list the mapreduce jobs like this:
+   kubectl exec -n {{ .Release.Namespace }} -it {{ template "fullname" . }}-nn-0 -- bash -c '$HADOOP_HOME/bin/mapred job -list'
+
+4. You can scale the number of data nodes like this:
+   helm upgrade {{ .Release.Name }} --set hadoop.dn.replicas=4 stable/hadoop
+                      OR
+   kubectl scale statefulset {{ template "fullname" . }}-dn --replicas=4
+
+   Make sure to update the values.yaml if you want to make this permanent.
