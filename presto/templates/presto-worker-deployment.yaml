@@ -11,6 +11,13 @@ metadata:
 spec:
   replicas: {{ .Values.worker.replicas }}
   revisionHistoryLimit: {{ .Values.worker.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ template "fullname" . }}
+      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+      release: "{{ .Release.Name }}"
+      heritage: "{{ .Release.Service }}"
+      component: worker
   template:
     metadata:
       labels:
