@@ -10,6 +10,12 @@ metadata:
 spec:
   replicas: {{ .Values.hive.replicas }}
   revisionHistoryLimit: {{ .Values.hive.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ template "fullname" . }}
+      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+      release: "{{ .Release.Name }}"
+      heritage: "{{ .Release.Service }}"
   template:
     metadata:
       labels:
