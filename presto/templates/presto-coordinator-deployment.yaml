@@ -5,6 +5,13 @@ metadata:
 spec:
   replicas: {{ .Values.coordinator.replicas }}
   revisionHistoryLimit: {{ .Values.coordinator.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ template "fullname" . }}
+      chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+      release: "{{ .Release.Name }}"
+      heritage: "{{ .Release.Service }}"
+      component: coordinator
   template:
     metadata:
       labels:
