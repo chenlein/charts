@@ -1,0 +1,87 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ include "prometheus.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "prometheus.name" . }}
+    helm.sh/chart: {{ include "prometheus.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "prometheus.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "prometheus.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "prometheus.fullname" . }}
+      securityContext:
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+            - "--web.enable-lifecycle"
+            - "--web.console.templates=/usr/share/prometheus/consoles"
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /prometheus
+              name: prometheus-data-volume
+            - mountPath: /etc/prometheus
+              name: prometheus-conf-volume
+            - mountPath: /etc/prometheus/rules
+              name: prometheus-rules-volume
+            - mountPath: /etc/prometheus/static
+              name: prometheus-static-volume
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        - name: prometheus-data-volume
+        {{- if .Values.persistence.enable }}
+          persistentVolumeClaim:
+            claimName: {{ include "prometheus.fullname" . }}
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+        - name: prometheus-conf-volume
+          configMap:
+            name: {{ include "prometheus.fullname" . }}-conf
+        - name: prometheus-rules-volume
+          configMap:
+            name: {{ include "prometheus.fullname" . }}-rule
+        - name: prometheus-static-volume
+          configMap:
+            name: {{ include "prometheus.fullname" . }}-static
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
