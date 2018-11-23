@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "logstash.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "logstash.name" . }}
+    helm.sh/chart: {{ include "logstash.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "logstash.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "logstash.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: monitor
+              containerPort: 9600
+              protocol: TCP
+            - name: beats
+              containerPort: 5044
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /usr/share/logstash/data
+              name: logstash-data-volume
+          env:
+            - name: "XPACK_MONITORING_ENABLED"
+              value: "true"
+            - name: "XPACK_MONITORING_ELASTICSEARCH_URL"
+              value: "http://{{ .Values.elasticsearch.host }}:{{ .Values.elasticsearch.port }}"
+          volumeMounts:
+            - mountPath: /usr/share/logstash/pipeline
+              name: logstash-conf-volume
+          livenessProbe:
+            httpGet:
+              path: /
+              port: monitor
+            initialDelaySeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: monitor
+            initialDelaySeconds: 20
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        - name: logstash-conf-volume
+          configMap:
+            name: {{ include "logstash.fullname" . }}
+        - name: logstash-data-volume
+        {{- if .Values.persistence.enable }}
+          persistentVolumeClaim:
+            claimName: {{ include "logstash.fullname" . }}
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

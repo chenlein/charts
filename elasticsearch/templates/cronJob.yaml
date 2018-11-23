@@ -1,0 +1,33 @@
+{{ if .Values.history.enable }}
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ include "elasticsearch.fullname" . }}-cleaner
+  labels:
+    app.kubernetes.io/name: {{ include "elasticsearch.name" . }}-cleaner
+    helm.sh/chart: {{ include "elasticsearch.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  schedule: "{{ .Values.history.schedule }}"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: cleaner
+              image: "{{ .Values.history.image.repository }}:{{ .Values.history.image.tag }}"
+              imagePullPolicy: {{ .Values.history.image.pullPolicy }}
+              command:
+                - "/bin/sh"
+                - "-c"
+                - "curl -X DELETE '{{ include "elasticsearch.fullname" . }}:{{ .Values.service.data.port }}/*`date -d '{{ .Values.history.retention }} days ago' '+%Y.%m.%d'`*'"
+                - |
+                  history=$(date -D '%s' +"%Y.%m.%d" -d "$(( `date +%s`-60*60*24*{{ .Values.history.retention }} ))");
+                  echo ${history};
+                  hostname={{ include "elasticsearch.fullname" . }}.{{ .Release.Namespace }};
+                  echo ${hostname}
+                  echo -ne "DELETE /*${history}* HTTP/1.1\r\nHost: ${hostname}\r\n\r\n" | nc -v -i 1 ${hostname} 9200
+          restartPolicy: OnFailure
+{{- end }}

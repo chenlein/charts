@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "elasticsearch.fullname" . }}-discovery
+  labels:
+    app.kubernetes.io/name: {{ include "elasticsearch.name" . }}-discovery
+    helm.sh/chart: {{ include "elasticsearch.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.discovery.type }}
+  ports:
+    - port: {{ .Values.service.discovery.port }}
+      targetPort: discovery
+      protocol: TCP
+      name: discovery
+  selector:
+    app.kubernetes.io/name: {{ include "elasticsearch.name" . }}-master
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "elasticsearch.fullname" . }}-data
+  labels:
+    app.kubernetes.io/name: {{ include "elasticsearch.name" . }}-data
+    helm.sh/chart: {{ include "elasticsearch.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.data.type }}
+  ports:
+    - port: {{ .Values.service.data.port }}
+      targetPort: data
+      protocol: TCP
+      name: data
+  selector:
+    app.kubernetes.io/name: {{ include "elasticsearch.name" . }}-data
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "elasticsearch.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "elasticsearch.name" . }}
+    helm.sh/chart: {{ include "elasticsearch.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.data.type }}
+  ports:
+    - port: {{ .Values.service.data.port }}
+      targetPort: data
+      protocol: TCP
+      name: data
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
