@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hbase-region
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-region
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.hbase.region.replicas }}
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-region
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: hbase-region
+  serviceName: {{ include "dmcop-bigdata.fullname" . }}-hbase-region
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-region
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: hbase-region
+    spec:
+      containers:
+        - name: hbase-region
+          image: {{ .Values.hbase.image.repository }}:{{ .Values.hbase.image.tag }}
+          imagePullPolicy: {{ .Values.hbase.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: HBASE_CONF_DIR
+              value: /etc/hbase
+            - name: HBASE_MANAGES_ZK
+              value: "false"
+            - name: NODE_TYPE
+              value: REGION
+          ports:
+            - name: hbase
+              containerPort: 16020
+              protocol: TCP
+            - name: hbase-ui
+              containerPort: 16030
+              protocol: TCP
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hbase-config-volume
+              mountPath: /etc/hbase
+            - name: bootstrap-volume
+              mountPath: /root/bootstrap
+#          livenessProbe:
+#            tcpSocket:
+#              port: 16020
+#            initialDelaySeconds: 90
+#            timeoutSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: 16020
+            initialDelaySeconds: 20
+            timeoutSeconds: 2
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-config
+        - name: hbase-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hbase-config
+        - name: bootstrap-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-hbase

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hive
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hive
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hive
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: hive
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hive
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: hive
+    spec:
+      initContainers:
+        - name: init
+          image: {{ .Values.hive.metastore.init.image.repository }}:{{ .Values.hive.metastore.init.image.tag }}
+          imagePullPolicy: {{ .Values.hive.metastore.init.image.pullPolicy }}
+          env:
+            - name: DRIVER_NAME
+              value: "dm.jdbc.driver.DmDriver"
+            - name: URL
+              value: "jdbc:dm://{{ include "dmcop-bigdata.fullname" . }}-hive-metastore.{{ .Release.Namespace }}:5236"
+            - name: USERNAME
+              value: "SYSDBA"
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dmcop-bigdata.fullname" . }}-hive-metastore
+                  key: database-dba-password
+            - name: IDENTIFIED
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dmcop-bigdata.fullname" . }}-hive-metastore
+                  key: database-hive-password
+          volumeMounts:
+            - name: init-dababase-volume
+              mountPath: /root/db_tools/script
+      containers:
+        - name: hive
+          image: {{ .Values.hive.image.repository }}:{{ .Values.hive.image.tag }}
+          imagePullPolicy: {{ .Values.hive.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: HIVE_METADATA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dmcop-bigdata.fullname" . }}-hive-metastore
+                  key: database-hive-password
+          ports:
+            - name: hive
+              containerPort: 10000
+              protocol: TCP
+            - name: ui
+              containerPort: 10002
+              protocol: TCP
+            - name: metastore
+              containerPort: 9083
+              protocol: TCP
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hive-bootstrap-volume
+              mountPath: /root/bootstrap
+          livenessProbe:
+            tcpSocket:
+              port: 10000
+            initialDelaySeconds: 180
+            timeoutSeconds: 2
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 10000
+            initialDelaySeconds: 30
+            timeoutSeconds: 2
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-config
+        - name: hive-bootstrap-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-hive-config
+        - name: init-dababase-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-hive-metastore

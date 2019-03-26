@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hbase-master
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ports:
+    - port: 16000
+      targetPort: hbase
+      protocol: TCP
+      name: hbase
+    - port: 16010
+      targetPort: hbase-ui
+      protocol: TCP
+      name: hbase-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hbase-master
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hbase-master-cluster
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master-cluster
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.hbase.master.service.type }}
+  ports:
+    - port: 16000
+      targetPort: hbase
+      protocol: TCP
+      name: hbase
+    - port: 16010
+      targetPort: hbase-ui
+      protocol: TCP
+      name: hbase-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hbase-master

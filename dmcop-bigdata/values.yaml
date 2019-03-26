@@ -1,0 +1,148 @@
+# Default values for dmcop-bigdata.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: stable
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  paths: []
+  hosts:
+    - chart-example.local
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+hadoop:
+  image:
+    repository: 192.168.101.88:5000/dmcop2/hadoop
+    tag: dm-2.9.1
+    pullPolicy: IfNotPresent
+  nameNode:
+    replicas: 1
+    service:
+      type: NodePort
+      port: 50070
+    persistence:
+      enabled: false
+      storageClass: glusterfs-storage-class
+      size: 1Gi
+  dataNode:
+    replicas: 3
+    service:
+      type: NodePort
+      port: 50075
+    persistence:
+      enabled: false
+      storageClass: glusterfs-storage-class
+      size: 1Gi
+  nodeManager:
+    replicas: 3
+    service:
+      type: NodePort
+      port: 8042
+  resourceManager:
+    replicas: 1
+    service:
+      type: NodePort
+      port: 8088
+  config:
+    storageClass: glusterfs-storage-class
+hive:
+  metastore:
+    service:
+      type: ClusterIP
+    image:
+      repository: 192.168.101.88:5000/dmcop2/dm7-dem-k8s
+      tag: v1.0.11
+      pullPolicy: IfNotPresent
+    license: 9gAAAKYWARzQ+gA7SZ1x0FQuL4l9r9f2SJaOPEaMbIzeLfkYlBpN7dk7WUwj0W1n1Ch1ccJhiQeuL7oqazW8eLYSsSGO2K+aj2OpFoj2LOVBGVK052/J+w9tzT06KehmI9UPhfX72w9FGh3m65Y8Cif+yYuBmFp0K5kKbOpwjS6Cw3maJZfXF34aq1bzKv7Nohi/thcvX5bfjByygXzvOkDFuOUM4zWVBy8uNYKsVIB1axyaFw7Sa6d4tMJWlxPOAVIxuQ6CxQ38xAoFjqZx7YMBjuAETJ/OceM5i8g/NyPjctEBtcmiqMO9Wt1iO1ZcjjlNpVZmSM772zMuMDC0OzD0CrEbgipo90W/gjFeeoYNzfIMGHoFqRPVS//eqZwLAvEx+bSJ+B/zgZGh+h8SQQiMC52PPsPghK4iQHFeTPN8EbVUq+4PdECcwvuW7PkMgLzjij1LtulbGnEKl3Ku4NOLOIEqzCvqg11EGKrygy3ESe4K1GwgmN+dDpWs5RRtdAUkHjUFo9KNUDzZVwwHward7u46nF8PAieQfGNr1+ICdUSk0CSK3q3hL4CUFWp5+Q2a+X9pwHd6oTHD4qHBHkj9z2ZchbKumy5jZs//5hnSHETJkLlFb32ENx36m5VHApkQEYWcRzAePIykt4R6oDUTYlEIRyw8ZcnGg3YL3n2kMOLWGKBXKEVgVIl1nMlHiellgZr+ay+6XMGSp6LvRxsC+m4Su5lqruBLwvoOogtSJWrDEZX8QT/5hcnqpykYTnSVRHsc63KMucFai3H9yJPBghE2zY25mEEMTKouNtmTzVXbg1rLhOcwd2WfUBG/WD1t+3Xzq1haBdPJlHHMYuBGH5NrlIZ8
+    persistence:
+      enabled: false
+      storageClass: glusterfs-storage-class
+      size: 5Gi
+    init:
+      image:
+        repository: 192.168.101.88:5000/dmcop2/database-tools
+        tag: 1.0-SNAPSHOT
+        pullPolicy: IfNotPresent
+  image:
+    repository: 192.168.101.88:5000/dmcop2/hive
+    tag: dm-1.2.2
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+presto:
+  image:
+    repository: 192.168.101.88:5000/dmcop2/presto-server
+    tag: dm-0.208
+    pullPolicy: IfNotPresent
+  coordinator:
+    service:
+      type: NodePort
+  worker:
+    service:
+      type: NodePort
+    replicas: 3
+zookeeper:
+  replicas: 3
+  image:
+    repository: 192.168.101.88:5000/zookeeper
+    tag: 3.4.13
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: false
+    storageClass: glusterfs-storage-class
+    size: 1Gi
+  tickTime: 60000
+  service:
+    type: NodePort
+hbase:
+  image:
+    repository: 192.168.101.88:5000/dmcop2/hbase
+    tag: 1.2.11
+    pullPolicy: Always
+  config:
+    storageClass: glusterfs-storage-class
+  master:
+    replicas: 1
+    service:
+      type: NodePort
+  region:
+    replicas: 3
+    service:
+      type: NodePort

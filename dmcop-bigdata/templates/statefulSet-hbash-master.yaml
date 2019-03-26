@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hbase-master
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: hbase-master
+  serviceName: {{ include "dmcop-bigdata.fullname" . }}-hbase-master
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase-master
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: hbase-master
+    spec:
+      containers:
+        - name: hbase-master
+          image: {{ .Values.hbase.image.repository }}:{{ .Values.hbase.image.tag }}
+          imagePullPolicy: {{ .Values.hbase.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: HBASE_CONF_DIR
+              value: /etc/hbase
+            - name: HBASE_MANAGES_ZK
+              value: "false"
+            - name: NODE_TYPE
+              value: MASTER
+          ports:
+            - name: hbase
+              containerPort: 16000
+              protocol: TCP
+            - name: hbase-ui
+              containerPort: 16010
+              protocol: TCP
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hbase-config-volume
+              mountPath: /etc/hbase
+            - name: bootstrap-volume
+              mountPath: /root/bootstrap
+#          livenessProbe:
+#            tcpSocket:
+#              port: 16000
+#            initialDelaySeconds: 90
+#            timeoutSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: 16000
+            initialDelaySeconds: 20
+            timeoutSeconds: 2
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-config
+        - name: hbase-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hbase-config
+        - name: bootstrap-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-hbase

@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-nm
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nm
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ports:
+    - port: 8041
+      targetPort: nm
+      protocol: TCP
+      name: nm
+    - port: 8042
+      targetPort: nm-ui
+      protocol: TCP
+      name: nm-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nm
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hadoop-nm
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-nm-cluster
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nm-cluster
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.hadoop.nodeManager.service.type }}
+  ports:
+    - port: {{ .Values.hadoop.nodeManager.service.port }}
+      targetPort: nm-ui
+      protocol: TCP
+      name: nm-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nm
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hadoop-nm

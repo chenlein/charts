@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-presto-coordinator
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-presto-coordinator
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-presto-coordinator
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: presto-coordinator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-presto-coordinator
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: presto-coordinator
+    spec:
+      containers:
+        - name: presto-coordinator
+          image: {{ .Values.presto.image.repository }}:{{ .Values.presto.image.tag }}
+          imagePullPolicy: {{ .Values.presto.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: COORDINATOR_NODE
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: presto-config-volume
+              mountPath: /root/bootstrap
+            - name: presto-catalog-volume
+              mountPath: /root/catalog
+            - name: presto-data-volume
+              mountPath: /var/presto/data
+          livenessProbe:
+            httpGet:
+              path: /v1/cluster
+              port: http
+            initialDelaySeconds: 30
+            timeoutSeconds: 2
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/cluster
+              port: http
+            initialDelaySeconds: 10
+            timeoutSeconds: 2
+            periodSeconds: 5
+      volumes:
+        - name: presto-config-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-presto-config
+        - name: presto-catalog-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-presto-catalog
+        - name: presto-data-volume
+          emptyDir: {}

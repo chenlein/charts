@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-rm
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ports:
+    - port: 8032
+      targetPort: rm
+      protocol: TCP
+      name: rm
+    - port: 8088
+      targetPort: rm-ui
+      protocol: TCP
+      name: rm-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hadoop-rm
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-rm-cluster
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm-cluster
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.hadoop.resourceManager.service.type }}
+  ports:
+    - port: {{ .Values.hadoop.resourceManager.service.port }}
+      targetPort: rm-ui
+      protocol: TCP
+      name: rm-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hadoop-rm

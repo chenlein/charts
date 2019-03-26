@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-rm
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.hadoop.resourceManager.replicas }}
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: hadoop-rm
+  serviceName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-rm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-rm
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: hadoop-rm
+    spec:
+      containers:
+        - name: hadoop-rm
+          image: {{ .Values.hadoop.image.repository }}:{{ .Values.hadoop.image.tag }}
+          imagePullPolicy: {{ .Values.hadoop.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: NODE_TYPE
+              value: RM
+          ports:
+            - name: rm-ui
+              containerPort: 8088
+              protocol: TCP
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hadoop-bootstrap-volume
+              mountPath: /root/bootstrap
+            - name: hadoop-tmp-dir-volume
+              mountPath: /root/hadoop/tmp
+          livenessProbe:
+            httpGet:
+              path: /ws/v1/cluster/info
+              port: 8088
+            initialDelaySeconds: 50
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /ws/v1/cluster/info
+              port: 8088
+            initialDelaySeconds: 20
+            timeoutSeconds: 2
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-config
+        - name: hadoop-bootstrap-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-hadoop
+        - name: hadoop-tmp-dir-volume
+          emptyDir: {}

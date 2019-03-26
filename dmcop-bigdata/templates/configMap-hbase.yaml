@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hbase
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hbase
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  bootstrap.sh: |-
+    #!/bin/bash
+
+    # ensure hadoop dataNode is running
+    while [[ -z `curl -sf http://{{ include "dmcop-bigdata.fullname" . }}-hadoop-dn-cluster:50075` ]]; do
+        echo "Waiting for hadoop is running..." && sleep 2
+    done
+
+    if [[ "$NODE_TYPE" == "MASTER" ]]; then
+        # copy default config file to configuration directory
+        cp -a $HBASE_HOME/conf/* $HBASE_CONF_DIR
+        # erasure regionservers
+        # cat /dev/null > $HBASE_CONF_DIR/regionservers
+        sed -i '/localhost/d' $HBASE_CONF_DIR/regionservers
+        # copy hadoop config file hdfs-site.xml to configuration directory
+        cat $HADOOP_CONF_DIR/hdfs-site.xml > $HBASE_CONF_DIR/hdfs-site.xml
+        # set hbase custom config file
+        cat /root/bootstrap/hbase-site.xml > $HBASE_CONF_DIR/hbase-site.xml
+    else
+        until cat $HBASE_CONF_DIR/hdfs-site.xml &> /dev/null; do echo "waiting for master to initialization config..." && sleep 2; done;
+        # Get this node's FQDN
+        FQDN=`ping $HOSTNAME -c 1 | grep PING | awk '{print $2}'`
+
+        # avoidance of repetition
+        sed -i '/'$FQDN'/d' $HBASE_CONF_DIR/regionservers
+        # set regionservers
+        echo $FQDN >> $HBASE_CONF_DIR/regionservers
+        # ensure succeed of registry
+        sleep 1 && grep $FQDN $HBASE_CONF_DIR/regionservers || echo $FQDN >> $HBASE_CONF_DIR/regionservers
+    fi
+
+    until [[ "$(cat $HBASE_CONF_DIR/regionservers | wc -l)" == "{{ .Values.hbase.region.replicas }}" ]]; do echo "waiting for all of region to registed..." && sleep 1; done;
+
+    # generate and apply zookeeper hosts
+    while read address
+    do
+        tmp=$(nslookup ${address#* } | grep "name = ")
+        tmp=${tmp##* }
+        dns="$dns${tmp%.*},"
+    done <<< "`nslookup {{ include "dmcop-bigdata.fullname" . }}-zookeeper | grep "Address:" | grep -v "#"`"
+    sed -i 's/${ZOOKEEPER_HOSTS}/'${dns%,*}'/g' `grep '${ZOOKEEPER_HOSTS}' -rl $HBASE_CONF_DIR`
+
+    # waiting for zookeeper complete of leader election
+    zk_leader=false
+    while [ ! "$zk_leader" = true ]
+    do
+        while read zk_host
+        do
+            if echo stat | nc $zk_host 2181 | grep -q "Mode:\sleader"; then
+                zk_leader=true && echo "leader is: $zk_host" && break
+            fi
+        done <<< "`echo ${dns%,*} | tr "," "\n"`"
+        if [ ! "$zk_leader" = true ]; then
+            echo "waiting for zookeeper complete of leader election..." && sleep 2
+        fi
+    done
+
+    # startup hbase
+    if [[ "$NODE_TYPE" == "MASTER" ]]; then
+    	# startup master
+        $HBASE_HOME/bin/hbase-daemon.sh start master &
+    else
+        # waiting master is running
+        while [[ -z `curl -sf http://{{ include "dmcop-bigdata.fullname" . }}-hbase-master-cluster.{{ .Release.Namespace }}:16010/master-status` ]]; do
+            echo "Waiting for {{ include "dmcop-bigdata.fullname" . }}-hbase-master-cluster.{{ .Release.Namespace }}..." && sleep 2
+        done
+    	# startup regionserver
+        $HBASE_HOME/bin/hbase-daemon.sh start regionserver &
+    fi
+
+    # keep running
+    sleep infinity
+  hbase-site.xml: |-
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <configuration>
+      <property>
+        <name>hbase.zookeeper.quorum</name>
+        <value>${ZOOKEEPER_HOSTS}</value>
+        <description>The directory shared by RegionServers.</description>
+      </property>
+      <property>
+        <name>hbase.zookeeper.property.dataDir</name>
+        <value>/zookeeper/data</value>
+        <description>Property from ZooKeeper config zoo.cfg. The directory where the snapshot is stored.</description>
+      </property>
+      <property>
+        <name>hbase.rootdir</name>
+        <value>hdfs://{{ include "dmcop-bigdata.fullname" . }}-hadoop-nn-cluster.{{ .Release.Namespace }}:8020/hbase</value>
+        <description>The directory shared by RegionServers.</description>
+      </property>
+      <property>
+        <name>hbase.cluster.distributed</name>
+        <value>true</value>
+        <description>The mode the cluster will be in. Possible values are false: standalone and pseudo-distributed setups with managed ZooKeeper true: fully-distributed with unmanaged ZooKeeper Quorum (see hbase-env.sh)</description>
+      </property>
+    </configuration>

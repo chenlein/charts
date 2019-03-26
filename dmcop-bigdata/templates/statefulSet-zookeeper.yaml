@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-zookeeper
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-zookeeper
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.zookeeper.replicas }}
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-zookeeper
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: zookeeper
+  serviceName: {{ include "dmcop-bigdata.fullname" . }}-zookeeper
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-zookeeper
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: {{ .Values.zookeeper.image.repository }}:{{ .Values.zookeeper.image.tag }}
+          imagePullPolicy: {{ .Values.zookeeper.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: NODE_REPLICAS
+              value: "{{ .Values.zookeeper.replicas }}"
+            - name: ZOO_DATA_DIR
+              value: "/zookeeper/data"
+            - name: ZOO_DATA_LOG_DIR
+              value: "/zookeeper/datalog"
+            - name: ZOO_LOG_DIR
+              value: "/zookeeper/logs"
+            - name: ZOO_TICK_TIME
+              value: "{{ .Values.zookeeper.tickTime }}"
+          ports:
+            - name: client
+              containerPort: 2181
+              protocol: TCP
+            - name: leader
+              containerPort: 2888
+              protocol: TCP
+            - name: election
+              containerPort: 3888
+              protocol: TCP
+          volumeMounts:
+            - name: data-volume
+              mountPath: /zookeeper
+            - name: bootstrap-volume
+              mountPath: /root/bootstrap
+          livenessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 50
+            timeoutSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 20
+            timeoutSeconds: 2
+      volumes:
+        - name: bootstrap-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-zookeeper-config
+{{ if not .Values.zookeeper.persistence.enabled }}
+        - name: data-volume
+          emptyDir: {}
+{{- end }}
+{{ if .Values.zookeeper.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data-volume
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "{{ .Values.zookeeper.persistence.storageClass }}"
+        resources:
+          requests:
+            storage: {{ .Values.zookeeper.persistence.size }}
+{{- end }}

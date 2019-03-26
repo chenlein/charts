@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-dn
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-dn
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.hadoop.dataNode.replicas }}
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-dn
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app-role: hadoop-dn
+  serviceName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-dn
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-dn
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app-role: hadoop-dn
+    spec:
+      containers:
+        - name: hadoop-dn
+          image: {{ .Values.hadoop.image.repository }}:{{ .Values.hadoop.image.tag }}
+          imagePullPolicy: {{ .Values.hadoop.image.pullPolicy }}
+          command: ["bash", "-c", "cat /root/bootstrap/bootstrap.sh | bash"]
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+            - name: NODE_TYPE
+              value: DN
+          ports:
+            - name: dn-ui
+              containerPort: 50075
+              protocol: TCP
+            - name: hdfs
+              containerPort: 8020
+              protocol: TCP
+          volumeMounts:
+            - name: hadoop-config-volume
+              mountPath: /etc/hadoop
+            - name: hadoop-bootstrap-volume
+              mountPath: /root/bootstrap
+            - name: dfs-data-dir-volume
+              mountPath: /root/hadoop/dfs/data
+            - name: hadoop-tmp-dir-volume
+              mountPath: /root/hadoop/tmp
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 50075
+            initialDelaySeconds: 50
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 50075
+            initialDelaySeconds: 20
+            timeoutSeconds: 2
+      volumes:
+        - name: hadoop-config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "dmcop-bigdata.fullname" . }}-hadoop-config
+        - name: hadoop-bootstrap-volume
+          configMap:
+            name: {{ include "dmcop-bigdata.fullname" . }}-hadoop
+{{ if not .Values.hadoop.dataNode.persistence.enabled }}
+        - name: dfs-data-dir-volume
+          emptyDir: {}
+{{- end }}
+        - name: hadoop-tmp-dir-volume
+          emptyDir: {}
+{{ if .Values.hadoop.dataNode.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: dfs-data-dir-volume
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "{{ .Values.hadoop.dataNode.persistence.storageClass }}"
+        resources:
+          requests:
+            storage: {{ .Values.hadoop.dataNode.persistence.size }}
+{{- end }}

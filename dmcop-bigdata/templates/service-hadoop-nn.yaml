@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-nn
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nn
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ports:
+    - port: 8020
+      targetPort: hdfs
+      protocol: TCP
+      name: hdfs
+    - port: 50070
+      targetPort: nn-ui
+      protocol: TCP
+      name: nn-ui
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nn
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hadoop-nn
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hadoop-nn-cluster
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nn-cluster
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.hadoop.nameNode.service.type }}
+  ports:
+    - port: 50070
+      targetPort: nn-ui
+      protocol: TCP
+      name: nn-ui
+    - port: 8020
+      targetPort: hdfs
+      protocol: TCP
+      name: hdfs
+  selector:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hadoop-nn
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app-role: hadoop-nn

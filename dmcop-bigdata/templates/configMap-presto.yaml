@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-presto-config
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-presto-config
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  bootstrap.sh: |-
+    #!/bin/bash
+
+    cd /root/bootstrap
+
+    mkdir -p $PRESTO_HOME/etc/catalog
+    mkdir -p /var/presto/data/var/log
+
+    cat ./node.properties > $PRESTO_HOME/etc/node.properties
+    cat ./jvm.config > $PRESTO_HOME/etc/jvm.config
+    cat ./config.properties > $PRESTO_HOME/etc/config.properties
+    cat ./log.properties > $PRESTO_HOME/etc/log.properties
+
+    sed -i 's/${COORDINATOR_NODE}/'$COORDINATOR_NODE'/g' $PRESTO_HOME/etc/config.properties
+
+    for cfg in ../catalog/*; do
+      cat $cfg > $PRESTO_HOME/etc/catalog/${cfg##*/}
+    done
+
+    $PRESTO_HOME/bin/launcher run --verbose
+  node.properties: |-
+    node.environment=production
+    node.data-dir=/var/presto/data
+  jvm.config: |-
+    -server
+    -Xmx16G
+    -XX:+UseG1GC
+    -XX:G1HeapRegionSize=32M
+    -XX:+UseGCOverheadLimit
+    -XX:+ExplicitGCInvokesConcurrent
+    -XX:+HeapDumpOnOutOfMemoryError
+    -XX:+ExitOnOutOfMemoryError
+  config.properties: |-
+    coordinator=${COORDINATOR_NODE}
+    node-scheduler.include-coordinator=true
+    http-server.http.port=8080
+    query.max-memory=10GB
+    query.max-memory-per-node=1GB
+    query.max-total-memory-per-node=2GB
+    discovery-server.enabled=true
+    discovery.uri=http://{{ include "dmcop-bigdata.fullname" . }}-presto-coordinator.{{ .Release.Namespace }}:8080
+  log.properties: |-
+    com.facebook.presto=INFO
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-presto-catalog
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-presto-catalog
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  hive.properties: |-
+    connector.name=hive-hadoop2
+    hive.metastore.uri=thrift://{{ include "dmcop-bigdata.fullname" . }}-hive.{{ .Release.Namespace }}:9083

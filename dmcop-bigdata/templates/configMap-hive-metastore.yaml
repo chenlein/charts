@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dmcop-bigdata.fullname" . }}-hive-metastore
+  labels:
+    app.kubernetes.io/name: {{ include "dmcop-bigdata.name" . }}-hive-metastore
+    helm.sh/chart: {{ include "dmcop-bigdata.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  execute.sql: |-
+    -- create user
+    create user hive identified by "${IDENTIFIED}";
+    -- grant authorization
+    grant dba to hive;
